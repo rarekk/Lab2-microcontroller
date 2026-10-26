@@ -1,0 +1,37 @@
+# ============================================================
+# Lab 2 .gitignore
+# Keep source, configs and the small Wokwi runtime images.
+# Ignore the rest of the ESP-IDF build output.
+# ============================================================
+
+# Everything CMake/Ninja/ESP-IDF generates inside build/
+**/build/*
+!**/build/flasher_args.json
+!**/build/*.bin
+!**/build/*.elf
+
+# Whitelist only the two binaries Wokwi flashes from subfolders.
+!**/build/bootloader/
+**/build/bootloader/*
+!**/build/bootloader/bootloader.bin
+
+!**/build/partition_table/
+**/build/partition_table/*
+!**/build/partition_table/partition-table.bin
+
+# ESP-IDF generated local configuration
+sdkconfig.old
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+*~
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
