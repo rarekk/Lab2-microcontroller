@@ -1,16 +1,15 @@
 # ============================================================
-# Lab 2 .gitignore
-# Keep source, configs and the small Wokwi runtime images.
-# Ignore the rest of the ESP-IDF build output.
+# Lab 2 - Seven Segment Display (ESP-IDF + Wokwi)
+# Keeps source/config plus only the binaries Wokwi flashes.
 # ============================================================
 
-# Everything CMake/Ninja/ESP-IDF generates inside build/
+# ESP-IDF / CMake / Ninja output
 **/build/*
 !**/build/flasher_args.json
 !**/build/*.bin
 !**/build/*.elf
 
-# Whitelist only the two binaries Wokwi flashes from subfolders.
+# Wokwi needs these two files from the subfolders as well.
 !**/build/bootloader/
 **/build/bootloader/*
 !**/build/bootloader/bootloader.bin
@@ -19,10 +18,21 @@
 **/build/partition_table/*
 !**/build/partition_table/partition-table.bin
 
-# ESP-IDF generated local configuration
-sdkconfig.old
+# Generated per-project configuration (recreated by idf.py set-target)
+**/sdkconfig
+**/sdkconfig.old
 
-# OS and editor files
+# Object files, maps, dependency files and logs
+*.o
+*.obj
+*.a
+*.map
+*.d
+*.log
+*.tmp
+*.temp
+
+# OS / editor files
 .DS_Store
 Thumbs.db
 desktop.ini
@@ -30,8 +40,3 @@ desktop.ini
 .idea/
 *.swp
 *~
-
-# Logs and temporary files
-*.log
-*.tmp
-*.temp

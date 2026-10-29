@@ -1,210 +1,157 @@
-# Lab 2 - ESP32 GPIO, Interrupts, ADC, PWM and Seven-Segment (Wokwi)
+# Lab 2 — Seven Segment Display (ESP32 + ESP-IDF + Wokwi)
 
-Three self-contained ESP-IDF projects for the ESP32 DevKit-C V4. Each folder is
-its own ESP-IDF project, with a Wokwi `diagram.json`, and a **pre-built**
-`build/` directory containing `flasher_args.json` and all binaries Wokwi needs.
+Five self-contained ESP-IDF projects for the ESP32 DevKit-C V4. Every folder
+has its own `main/main.c`, `diagram.json`, `wokwi.toml`, and a **pre-built**
+`build/` directory that Wokwi can flash directly.
 
-| Module | Topics | Input | Output |
+| Folder | Lab steps | Function | Submission check |
 |---|---|---|---|
-| `module1_gpio_switch` | Digital I/O, GPIO interrupt, ISR debounce | Push button on GPIO4 | LED on GPIO2 |
-| `module2_brightness_control` | ADC oneshot, LEDC PWM | Potentiometer on GPIO34 | LED on GPIO2 |
-| `module3_seven_segment` | Multiplexed seven-segment display, button interrupt | Push button on GPIO18 | 2-digit display |
+| `task_1_to_4_auto_count_0_9` | 1–4 | Auto count 0→9, 1 s per digit | — |
+| `task_5_to_8_switch_count_0_9` | 5–8 | Push button counts 0→9 and wraps | — |
+| `task_9_to_12_press_counter_max_9` | 9–12 | Press counter saturates at 9, reset button | **Check 1** |
+| `task_13_dual_segment_88` | 13 | Static `88` on two digits | — |
+| `task_14_to_17_counter_00_99` | 14–17 | Multiplexed 00–99 counter with buttons | **Check 2** |
 
-Build status (ESP-IDF **v6.1**, target `esp32`):
+Full laboratory report (Thai): [`LAB_REPORT.md`](LAB_REPORT.md)
 
-| Module | App binary | Size | Result |
-|---|---|---:|---|
-| `module1_gpio_switch` | `build/module1_gpio_switch.bin` | `0x253F0` (152,560 B) | Build OK |
-| `module2_brightness_control` | `build/module2_brightness_control.bin` | `0x27A00` (162,304 B) | Build OK |
-| `module3_seven_segment` | `build/module3_seven_segment.bin` | `0x25520` (152,864 B) | Build OK |
+Wiring reference: [`docs/WIRING.md`](docs/WIRING.md)
 
-The `build/` folders are deliberately kept. Wokwi does **not** compile the
-project, so deleting them causes `firmware binary build/flasher_args.json not
-found`.
+## Hardware and pin map
+
+All projects use a **common-cathode** `wokwi-7segment` (segments active HIGH).
+A 220 Ω resistor is placed in series with every segment.
+
+| Signal | GPIO | Notes |
+|---|---|---|
+| A | 13 | top |
+| B | 12 | top-right |
+| C | 14 | bottom-right |
+| D | 27 | bottom |
+| E | 26 | bottom-left |
+| F | 25 | top-left |
+| G | 33 | middle |
+| DIG1 / COM (tens / single digit) | 16 | active LOW common |
+| DIG2 (units) | 17 | active LOW common |
+| COUNT button | 18 | input, internal pull-up, active LOW |
+| RESET button | 19 | input, internal pull-up, active LOW |
+
+Single-digit projects connect `seg1:COM` to GND. Two-digit projects drive
+`DIG1`/`DIG2` from GPIO16/GPIO17.
+
+7-segment patterns (common cathode, bit0=A … bit6=G):
+
+| Digit | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Hex | 3F | 06 | 5B | 4F | 66 | 6D | 7D | 07 | 7F | 6F |
 
 ## Project layout
 
 ```
 Lab2/
-├── build_all.ps1
+├── build_all.cmd              # double-click / cmd wrapper
+├── build_all.ps1              # sets ESP-IDF env, builds all five projects
+├── LAB_REPORT.md              # complete 17-step report
 ├── README.md
-├── module1_gpio_switch/
-│   ├── CMakeLists.txt
-│   ├── sdkconfig
-│   ├── sdkconfig.defaults
-│   ├── wokwi.toml
-│   ├── diagram.json
-│   ├── build/                 # generated, required by Wokwi
-│   └── main/
-│       ├── CMakeLists.txt
-│       └── main.c
-├── module2_brightness_control/
-│   └── ... same structure
-└── module3_seven_segment/
-    └── ... same structure
+├── docs/
+│   └── WIRING.md
+└── task_1_to_4_auto_count_0_9/
+    ├── CMakeLists.txt
+    ├── sdkconfig.defaults
+    ├── wokwi.toml
+    ├── diagram.json
+    ├── REPORT.md              # per-step report, flowchart and results
+    ├── build/                 # generated, required by Wokwi
+    └── main/
+        ├── CMakeLists.txt
+        └── main.c
 ```
 
-## Module 1 - GPIO switch with ISR debounce
-
-- Button GPIO4: input with internal pull-up, active low, `GPIO_INTR_NEGEDGE`.
-- The ISR is marked `IRAM_ATTR`, applies a **50 ms** time-window debounce with
-  `esp_timer_get_time()`, then posts the GPIO number to a FreeRTOS queue.
-- A worker task receives the event, toggles the LED and prints the press count.
-- The LED blinks three times at startup to prove the output works.
-
-Wiring:
-
-| ESP32 pin | Component |
-|---|---|
-| GPIO4 | Push button `1.l` |
-| GND | Push button `2.l` |
-| GPIO2 | 220 ohm resistor -> LED anode |
-| GND | LED cathode |
-
-Expected serial output:
-
-```
-I (xxx) MODULE1: Ready: press the button on GPIO4 (LED on GPIO2).
-I (xxx) MODULE1: Button GPIO4 pressed -> count=1, LED ON
-I (xxx) MODULE1: Button GPIO4 pressed -> count=2, LED OFF
-```
-
-## Module 2 - Potentiometer ADC to PWM brightness
-
-- Potentiometer wiper on **GPIO34 = ADC1 channel 6**.
-- ADC oneshot driver, 12 dB attenuation, default 12-bit width.
-- 16 samples are averaged per update (every 200 ms).
-- Raw value `0..4095` is mapped to LEDC duty `0..255`.
-- LEDC low-speed channel 0, 5 kHz, 8-bit resolution, LED on GPIO2.
-
-Wiring:
-
-| ESP32 pin | Component |
-|---|---|
-| 3V3 | Potentiometer `VCC` |
-| GND | Potentiometer `GND` |
-| GPIO34 | Potentiometer `SIG` |
-| GPIO2 | 220 ohm resistor -> LED anode |
-| GND | LED cathode |
-
-Expected serial output:
-
-```
-I (xxx) MODULE2: ADC raw=2048 (1650 mV) -> duty=127/255 (49%)
-```
-
-Turn the knob with the mouse, or use Left/Right, Page Up/Page Down, Home/End
-after clicking the potentiometer.
-
-## Module 3 - Multiplexed 2-digit seven-segment display
-
-- Wokwi `wokwi-7segment` with `"digits": "2"` and `"common": "cathode"`.
-- Segments A-G: GPIO13, GPIO12, GPIO14, GPIO27, GPIO26, GPIO25, GPIO33.
-- `DIG1` (tens) = GPIO16, `DIG2` (units) = GPIO17, both active low.
-- Only one digit is enabled at a time; the firmware alternates every 2 ms
-  (about 250 Hz full refresh) to create the multiplexed display.
-- Button GPIO18 increments a `00..99` counter. The same 50 ms ISR debounce and
-  queue pattern as Module 1 is used.
-- Startup self-test shows `8` on each digit for 400 ms.
-
-Wiring:
-
-| ESP32 pin | Component |
-|---|---|
-| GPIO13/12/14/27/26/25/33 | 220 ohm resistor -> segments A/B/C/D/E/F/G |
-| GPIO16 | Display `DIG1` (tens common) |
-| GPIO17 | Display `DIG2` (units common) |
-| GPIO18 | Push button `1.l` |
-| GND | Push button `2.l` |
-
-Expected serial output:
-
-```
-I (xxx) MODULE3: Ready: press GPIO18 to count. Display is multiplexed at ~250 Hz.
-I (xxx) MODULE3: Button GPIO18 pressed -> count=01
-I (xxx) MODULE3: Button GPIO18 pressed -> count=02
-```
+The other four task folders use exactly the same structure.
 
 ## Build
 
-Open the **ESP-IDF PowerShell** (or run the activation script), then build one
-module:
+The build script sets the ESP-IDF v6.1 environment itself, so it works even when
+the PowerShell profile is blocked by execution policy.
 
 ```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-. C:\Espressif\tools\Microsoft.v6.1.PowerShell_profile.ps1
-$env:PYTHONUTF8 = "1"
+cd C:\microcontrollerPJ\Lab2
+.\build_all.cmd
+```
 
-cd C:\microcontrollerPJ\Lab2\module1_gpio_switch
-idf.py set-target esp32
+Manual build for one module:
+
+```powershell
+cd C:\microcontrollerPJ\Lab2\task_1_to_4_auto_count_0_9
+idf.py set-target esp32     # only needed when sdkconfig is absent
 idf.py build
 ```
 
-Repeat for `module2_brightness_control` and `module3_seven_segment`.
+`set-target` is required before the first build because Wokwi does not compile
+the project. `idf.py build` then produces everything Wokwi reads:
 
-To rebuild all three modules with one command:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File C:\microcontrollerPJ\Lab2\build_all.ps1
+```
+build/flasher_args.json
+build/bootloader/bootloader.bin
+build/partition_table/partition-table.bin
+build/<project>.bin
+build/<project>.elf
 ```
 
-`set-target` only needs to run once per module; it creates `sdkconfig`. The
-projects already contain a generated `sdkconfig` and a 4 MB flash configuration
-in `sdkconfig.defaults` to match the Wokwi board.
+### Verified build result (ESP-IDF v6.1, target esp32)
+
+| Module | App `.bin` | Size | Status |
+|---|---|---:|---|
+| `task_1_to_4_auto_count_0_9` | `build/task_1_to_4_auto_count_0_9.bin` | 149,408 B (`0x247A0`) | OK |
+| `task_5_to_8_switch_count_0_9` | `build/task_5_to_8_switch_count_0_9.bin` | 152,688 B (`0x25470`) | OK |
+| `task_9_to_12_press_counter_max_9` | `build/task_9_to_12_press_counter_max_9.bin` | 153,024 B (`0x255C0`) | OK |
+| `task_13_dual_segment_88` | `build/task_13_dual_segment_88.bin` | 149,424 B (`0x247B0`) | OK |
+| `task_14_to_17_counter_00_99` | `build/task_14_to_17_counter_00_99.bin` | 153,120 B (`0x25620`) | OK |
+
+Every module also contains `bootloader.bin` (26,176 B) and
+`partition-table.bin` (3,072 B).
 
 ## Run in Wokwi
 
-1. In VS Code, open **the module folder itself** as the workspace, for example
-   `C:\microcontrollerPJ\Lab2\module1_gpio_switch`. Do not open the whole
-   `Lab2` folder, otherwise Wokwi looks for the wrong `diagram.json`.
+1. Open **one module folder** as the VS Code workspace, for example
+   `C:\microcontrollerPJ\Lab2\task_14_to_17_counter_00_99`.
+   Do not open the whole `Lab2` folder: Wokwi searches the workspace root for
+   `diagram.json` and `wokwi.toml`.
 2. Confirm `build/flasher_args.json` exists.
 3. Run **Wokwi: Start Simulator**.
-4. Open the serial monitor. Press the button (`b` key by default) or turn the
-   potentiometer and watch the output.
+4. Open the serial monitor. Use the on-screen buttons, or the keyboard:
+   - `b` = COUNT (GPIO18)
+   - `r` = RESET (GPIO19)
 
-`wokwi.toml` loads the full flash image, so the bootloader and partition table
-are programmed as well as the application:
+`wokwi.toml` loads the complete flash image, not only the application:
 
 ```toml
 [wokwi]
 version = 1
 firmware = 'build/flasher_args.json'
-elf = 'build/module1_gpio_switch.elf'
+elf = 'build/task_14_to_17_counter_00_99.elf'
 ```
 
-## Version control
+## Notes
 
-The root `.gitignore` ignores the large ESP-IDF build tree but keeps the small
-files Wokwi needs, so a fresh clone can run the simulator without rebuilding:
-
-| Kept in git | Ignored |
-|---|---|
-| `main/main.c`, `main/CMakeLists.txt` | `build/CMakeCache.txt`, `build/CMakeFiles/`, `build/esp-idf/` |
-| `CMakeLists.txt`, `sdkconfig`, `sdkconfig.defaults` | `build/*.map`, `build/*.ninja*`, `build/compile_commands.json` |
-| `diagram.json`, `wokwi.toml` | `sdkconfig.old`, logs, editor folders |
-| `build/flasher_args.json` | Other intermediate object files |
-| `build/bootloader/bootloader.bin` | |
-| `build/partition_table/partition-table.bin` | |
-| `build/<project>.bin` and `build/<project>.elf` | |
+- The three old modules from the previous lab (`module1_gpio_switch`,
+  `module2_brightness_control`, `module3_seven_segment`) were removed because
+  they are not part of the seven-segment 17-step assignment.
+- The `build/` folders are intentionally kept so a fresh clone can start Wokwi
+  without rebuilding. The `.gitignore` ignores the large intermediate tree but
+  whitelists `flasher_args.json`, the application `.bin`/`.elf`, the bootloader
+  and the partition table.
+- A missing `build/flasher_args.json` is the usual cause of the Wokwi error
+  `firmware binary build/flasher_args.json not found`: run the build script, or
+  open the module folder itself as the workspace.
 
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `firmware binary build/flasher_args.json not found` | `build/` missing or wrong folder open | Build the module, then open that module folder as the workspace |
-| `idf.py` not recognized / scripts disabled | PowerShell execution policy | `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`, then activate ESP-IDF |
-| Unicode warning from ESP-IDF | Windows code page | `$env:PYTHONUTF8 = "1"` before building |
-| Wokwi shows a blank display | Wrong common type | This project uses a **common-cathode** display; keep `"common": "cathode"` |
-| Counter jumps by more than one | Contact bounce | Keep the 50 ms ISR debounce; do not set `"bounce": "0"` in the diagram |
-| Wokwi cannot find the board | Old Lab document board name | Use `board-esp32-devkit-c-v4` (with the hyphen before `c`) |
-
-## Notes
-
-- Build environment: ESP-IDF v6.1 at `C:\esp\v6.1\esp-idf`, `xtensa-esp-elf`
-  GCC 15.2.0, target `esp32`.
-- All three modules were configured with `idf.py set-target esp32` and built
-  with `idf.py build`; the output folders in this repository are the result of
-  those builds.
-- No lab PDF/document was present in `C:\microcontrollerPJ\Lab2`, so the module
-  breakdown follows the topics in the request: GPIO/interrupts, ADC/PWM, and
-  multiplexed seven-segment.
+| `firmware binary build/flasher_args.json not found` | `build/` missing or wrong workspace root | Run `build_all.cmd`, then open the module folder itself |
+| `idf.py` not recognized | IDF environment not activated | Use `build_all.cmd`; it sets the environment |
+| `running scripts is disabled` | PowerShell execution policy | `build_all.cmd` uses `-ExecutionPolicy Bypass` |
+| Display blank | Common type mismatch | Keep `"common": "cathode"` in `diagram.json` |
+| Ghost segments when counting | Missing blanking between digits | Keep `display_digits_off()` before changing segments |
+| Counter jumps by two | Contact bounce | Keep the 50 ms `DEBOUNCE_US` window |
+| Only one digit lights | DIG pin not driven LOW | Common cathode digits are active LOW |

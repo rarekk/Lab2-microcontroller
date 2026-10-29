@@ -1,0 +1,9 @@
+# Match the 4 MB flash of the Wokwi ESP32 DevKit-C V4 board.
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="4MB"
+
+# 1 kHz FreeRTOS tick keeps the 1 s delay and 50 ms debounce exact.
+CONFIG_FREERTOS_HZ=1000
+
+# Keep the image small and quiet for simulation.
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y

@@ -1,0 +1,8 @@
+# Match the 4 MB flash of the Wokwi ESP32 DevKit-C V4 board.
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="4MB"
+
+# 1 kHz tick makes the 2 ms digit refresh and 50 ms debounce precise.
+CONFIG_FREERTOS_HZ=1000
+
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y
